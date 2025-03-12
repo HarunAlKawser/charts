@@ -1,0 +1,62 @@
+name: GitHub Issue Analytics
+
+on:
+  push:
+    branches:
+      - main  # Adjust the branch name to your default branch (e.g., "main" or "master")
+      
+jobs:
+  analytics:
+    runs-on: ubuntu-latest
+    steps:
+    
+    # Step 1: Checkout the repository containing the GitHub Issue Analytics tool
+    - name: Checkout Repository
+      uses: actions/checkout@v2
+    
+    # Step 2: Set up Python
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.8'
+    
+    # Step 3: Install dependencies
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install PyGithub pandas plotly
+    
+    # Step 4: Set GitHub Token as an environment variable
+    - name: Set GitHub Token
+      run: echo "GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
+    
+    # Step 5: Fetch GitHub issue data (for the last week - Friday to Thursday)
+    - name: Fetch GitHub Issue Data
+      id: fetch_data
+      run: |
+        # Calculate the current date (Thursday) and previous Friday
+        current_date=$(date -u +"%Y-%m-%d")
+        previous_friday=$(date -u -d 'last friday' +"%Y-%m-%d")
+        
+        # Extract year, month, and week from the previous Friday
+        year=$(date -u -d "$previous_friday" +"%Y")
+        month=$(date -u -d "$previous_friday" +"%m")
+        week=$(date -u -d "$previous_friday" +"%U")
+        
+        echo "Fetching data for week from $previous_friday to $current_date"
+        
+        python fetch_github_data.py $year $month $week ${{ github.event.inputs.repository }}
+    
+    # Step 6: Generate the report
+    - name: Generate Report
+      id: generate_report
+      run: |
+        DATA_FILE_PATH=$(python fetch_github_data.py $year $month $week ${{ github.event.inputs.repository }} | awk '/OUTPUT_FILE:/ {print $2}')
+        python generate_report.py --data $DATA_FILE_PATH --output /tmp/github_issues_report.html
+    
+    # Step 7: Upload the report as an artifact (optional)
+    - name: Upload Report Artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: github-issues-report
+        path: /tmp/github_issues_report.html
