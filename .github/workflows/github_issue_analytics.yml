@@ -38,11 +38,18 @@ jobs:
         current_date=$(date -u +"%Y-%m-%d")
         previous_friday=$(date -u -d 'last friday' +"%Y-%m-%d")
         
-        # Extract year, month, and week from the previous Friday
+        # Extract year, month from the previous Friday
         year=$(date -u -d "$previous_friday" +"%Y")
         month=$(date -u -d "$previous_friday" +"%m")
-        week=$(date -u -d "$previous_friday" +"%U")
-        
+
+        # Calculate the first day of the month
+        first_day_of_month=$(date -u -d "$year-$month-01" +"%Y-%m-%d")
+
+        # Calculate the week of the month by counting the number of Fridays from the first day of the month
+        week=$(($(($(date -u -d "$previous_friday" +"%d") - 1)) / 7 + 1))
+
+        echo "Calculated Week: $week"
+
         # Construct the command
         command="python fetch_github_data.py $year $month $week ${{ github.event.inputs.repository }}"
 
