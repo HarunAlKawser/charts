@@ -30,6 +30,7 @@ jobs:
     - name: Set GitHub Token
       run: echo "MY_GITHUB_TOKEN=${{ secrets.MY_GITHUB_TOKEN }}" >> $GITHUB_ENV
     
+    # Step 5: Fetch GitHub issue data (for the last week - Friday to Thursday)
     - name: Fetch GitHub Issue Data
       id: fetch_data
       run: |
@@ -43,32 +44,16 @@ jobs:
         year=$(date -u -d "$previous_friday" +"%Y")
         month=$(date -u -d "$previous_friday" +"%m")
         
-        # Calculate the first day of the month
-        first_day_of_month=$(date -u -d "$year-$month-01" +"%Y-%m-%d")
-        
-        # Get the day of the month for the previous Friday
-        previous_friday_day=$(date -u -d "$previous_friday" +"%d")
-        
-        # Calculate the number of days between the first day of the month and the previous Friday
-        days_diff=$(( ( $(date -u -d "$previous_friday" +%s) - $(date -u -d "$first_day_of_month" +%s) ) / 86400 ))
-        
-        # Calculate the week of the month based on the days difference
-        week=$(( (days_diff) / 7 + 1 ))
-        
-        # Print the week calculation for debugging
-        echo "Calculated week of the month: $week"
-        
         # Run the fetch command without repository name
-        echo "Running command: python fetch_github_data.py $year $month $week"
-        python fetch_github_data.py $year $month $week
-
+        echo "Running command: python fetch_github_data.py $year $month"
+        python fetch_github_data.py $year $month
 
 
     # Step 6: Generate the report
     - name: Generate Report
       id: generate_report
       run: |
-        DATA_FILE_PATH=$(python fetch_github_data.py $year $month $week ${{ github.event.inputs.repository }} | awk '/OUTPUT_FILE:/ {print $2}')
+        DATA_FILE_PATH=$(python fetch_github_data.py $year $month | awk '/OUTPUT_FILE:/ {print $2}')
         python generate_report.py --data $DATA_FILE_PATH --output /tmp/github_issues_report.html
     
     # Step 7: Upload the report as an artifact (use latest version v4 of upload-artifact)
