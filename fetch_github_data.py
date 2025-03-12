@@ -104,7 +104,7 @@ def main():
 
     # Get optional week parameter and repository name
     week = None
-    repo_name = "SELISEdigitalplatforms/blocks-issue-tracker"
+    repo_name = "HarunAlKawser/charts"
     
     # Check for remaining arguments
     remaining_args = sys.argv[3:] if len(sys.argv) >= 3 else []

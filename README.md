@@ -52,7 +52,7 @@ python fetch_github_data.py [YEAR] [MONTH] [WEEK] [REPOSITORY_NAME]
 - `YEAR`: The year to analyze (e.g., 2025)
 - `MONTH`: The month to analyze (1-12)
 - `WEEK`: (Optional) Specific week of the month (1-5)
-- `REPOSITORY_NAME`: (Optional) GitHub repository in format "owner/repo" (defaults to "SELISEdigitalplatforms/blocks-issue-tracker")
+- `REPOSITORY_NAME`: (Optional) GitHub repository in format "owner/repo" (defaults to "HarunAlKawser/charts")
 
 **Examples:**
 ```bash
