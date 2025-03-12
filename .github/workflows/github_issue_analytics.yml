@@ -28,7 +28,7 @@ jobs:
     
     # Step 4: Set GitHub Token as an environment variable
     - name: Set GitHub Token
-      run: echo "GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
+      run: echo "MY_GITHUB_TOKEN=${{ secrets.MY_GITHUB_TOKEN }}" >> $GITHUB_ENV
     
     # Step 5: Fetch GitHub issue data (for the last week - Friday to Thursday)
     - name: Fetch GitHub Issue Data

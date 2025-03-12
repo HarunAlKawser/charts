@@ -130,15 +130,15 @@ def main():
 
     # Authentication using environment variable
     logger.info("Checking for GitHub token")
-    github_token = os.getenv("GITHUB_TOKEN")
-    if not github_token:
-        logger.error("GITHUB_TOKEN environment variable not set")
+    MY_GITHUB_TOKEN = os.getenv("MY_GITHUB_TOKEN")
+    if not MY_GITHUB_TOKEN:
+        logger.error("MY_GITHUB_TOKEN environment variable not set")
         sys.exit(1)
 
     g = None
     try:
         logger.info("Authenticating with GitHub")
-        auth = Auth.Token(github_token)
+        auth = Auth.Token(MY_GITHUB_TOKEN)
         g = Github(auth=auth)
         user = g.get_user()
         logger.info("Successfully authenticated as: %s", user.login)

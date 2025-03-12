@@ -36,7 +36,7 @@ This analytics tool collects data from GitHub repositories and generates interac
    ```
 3. Set your GitHub token as an environment variable:
    ```
-   export GITHUB_TOKEN=your_github_token_here
+   export MY_GITHUB_TOKEN=your_MY_GITHUB_TOKEN_here
    ```
 
 ## Usage
