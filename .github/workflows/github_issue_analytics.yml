@@ -54,9 +54,9 @@ jobs:
         DATA_FILE_PATH=$(python fetch_github_data.py $year $month $week ${{ github.event.inputs.repository }} | awk '/OUTPUT_FILE:/ {print $2}')
         python generate_report.py --data $DATA_FILE_PATH --output /tmp/github_issues_report.html
     
-    # Step 7: Upload the report as an artifact (optional)
+    # Step 7: Upload the report as an artifact (use latest version v3 of upload-artifact)
     - name: Upload Report Artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: github-issues-report
         path: /tmp/github_issues_report.html
