@@ -34,30 +34,32 @@ jobs:
     - name: Fetch GitHub Issue Data
       id: fetch_data
       run: |
-        # Calculate the current date (Thursday) and previous Friday
+        # Get today's date (Thursday)
         current_date=$(date -u +"%Y-%m-%d")
+        
+        # Get the previous Friday's date
         previous_friday=$(date -u -d 'last friday' +"%Y-%m-%d")
         
         # Extract year, month from the previous Friday
         year=$(date -u -d "$previous_friday" +"%Y")
         month=$(date -u -d "$previous_friday" +"%m")
-
+        
         # Calculate the first day of the month
         first_day_of_month=$(date -u -d "$year-$month-01" +"%Y-%m-%d")
-
-        # Calculate the week of the month by counting the number of Fridays from the first day of the month
-        week=$(($(($(date -u -d "$previous_friday" +"%d") - 1)) / 7 + 1))
-
-        echo "Calculated Week: $week"
-
-        # Construct the command
-        command="python fetch_github_data.py $year $month $week ${{ github.event.inputs.repository }}"
-
-        # Print the constructed command
-        echo "Running command: $command"
         
-        # Run the fetch command
-        $command
+        # Get the day of the month for the previous Friday
+        previous_friday_day=$(date -u -d "$previous_friday" +"%d")
+        
+        # Calculate which week the previous Friday falls into within the month
+        week=$(( (previous_friday_day - 1) / 7 + 1 ))
+
+        # Print the week calculation for debugging
+        echo "Calculated week of the month: $week"
+        
+        # Run the fetch command without repository name
+        echo "Running command: python fetch_github_data.py $year $month $week"
+        python fetch_github_data.py $year $month $week
+
 
     # Step 6: Generate the report
     - name: Generate Report
