@@ -43,10 +43,15 @@ jobs:
         month=$(date -u -d "$previous_friday" +"%m")
         week=$(date -u -d "$previous_friday" +"%U")
         
-        echo "Fetching data for week from $previous_friday to $current_date"
+        # Construct the command
+        command="python fetch_github_data.py $year $month $week ${{ github.event.inputs.repository }}"
+
+        # Print the constructed command
+        echo "Running command: $command"
         
-        python fetch_github_data.py $year $month $week ${{ github.event.inputs.repository }}
-    
+        # Run the fetch command
+        $command
+
     # Step 6: Generate the report
     - name: Generate Report
       id: generate_report
