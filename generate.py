@@ -1,95 +1,182 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import os
+import numpy as np
+from openpyxl import Workbook
+from openpyxl.styles import PatternFill
+from openpyxl.utils.dataframe import dataframe_to_rows
+from openpyxl.drawing.image import Image
 
-# Load the Excel files for March and April reports
-march_df = pd.read_excel('march_report.xlsx')  # Replace with your March file path
-april_df = pd.read_excel('april_report.xlsx')  # Replace with your April file path
-
-# Define the branches to filter
-branches_to_check = ['stg', 'stage', 'stg-aks' ,'stagging']
-
-# Filter both dataframes by the given branches
-march_filtered = march_df[march_df['Branch'].isin(branches_to_check)]
-april_filtered = april_df[april_df['Branch'].isin(branches_to_check)]
-
-# Remove rows with NaN or 0 in the relevant columns for both March and April data
-columns_to_check = ['Code Smell', 'Duplications', 'Security Hotspot']
-
-march_filtered = march_filtered[~march_filtered[columns_to_check].isin([0, '0']).any(axis=1)]
-april_filtered = april_filtered[~april_filtered[columns_to_check].isin([0, '0']).any(axis=1)]
-
-# Merge the two dataframes based on 'Repository Name'
-merged_df = pd.merge(march_filtered, april_filtered, on='Repository Name', suffixes=('_march', '_april'))
-
-# Remove rows where any relevant column (Code Smell, Duplications, Security Hotspot) is NaN or 0
-merged_df = merged_df.dropna(subset=['Code Smell_march', 'Duplications_march', 'Security Hotspot_march', 
-                                     'Code Smell_april', 'Duplications_april', 'Security Hotspot_april'])
-merged_df = merged_df[~merged_df[['Code Smell_march', 'Duplications_march', 'Security Hotspot_march', 
-                                  'Code Smell_april', 'Duplications_april', 'Security Hotspot_april']].isin([0, '0']).any(axis=1)]
-
-# Initialize empty lists to store the results
-code_smell_changes = []
-duplication_changes = []
-security_changes = []
-
-# Compare Code Smell, Duplications, and Security Hotspot
-for index, row in merged_df.iterrows():
-    # Compare Code Smell (if different)
-    if row['Code Smell_march'] != row['Code Smell_april']:
-        code_smell_changes.append(row)
-
-    # Compare Duplications (if different)
-    if row['Duplications_march'] != row['Duplications_april']:
-        duplication_changes.append(row)
-
-    # Compare Security Hotspot (if different)
-    if row['Security Hotspot_march'] != row['Security Hotspot_april']:
-        security_changes.append(row)
-
-# Convert the lists of changes to DataFrames
-code_smell_df = pd.DataFrame(code_smell_changes)
-duplication_df = pd.DataFrame(duplication_changes)
-security_df = pd.DataFrame(security_changes)
-
-# Prepare the data for exporting to Excel for Code Smell
-if not code_smell_df.empty:
-    code_smell_df['Code Smell Difference'] = code_smell_df['Code Smell_april'] - code_smell_df['Code Smell_march']
-    code_smell_df = code_smell_df[['Repository Name', 'Code Smell_march', 'Code Smell_april', 'Code Smell Difference']]
-    code_smell_df.to_excel('code_smell_changes.xlsx', index=False)
-
-# Prepare the data for exporting to Excel for Duplications
-if not duplication_df.empty:
-    duplication_df['Duplication Difference'] = duplication_df['Duplications_april'] - duplication_df['Duplications_march']
-    duplication_df = duplication_df[['Repository Name', 'Duplications_march', 'Duplications_april', 'Duplication Difference']]
-    duplication_df.to_excel('duplication_changes.xlsx', index=False)
-
-# Prepare the data for exporting to Excel for Security Hotspot
-if not security_df.empty:
-    security_df['Security Hotspot Difference'] = security_df['Security Hotspot_april'] - security_df['Security Hotspot_march']
-    security_df = security_df[['Repository Name', 'Security Hotspot_march', 'Security Hotspot_april', 'Security Hotspot Difference']]
-    security_df.to_excel('security_changes.xlsx', index=False)
-
-# Function to plot bar chart with color coding (green for decrease, red for increase)
-def plot_bar_chart(df, column, title):
-    # Create color list based on change direction: green for decrease, red for increase
-    colors = ['green' if row[f'{column}_april'] < row[f'{column}_march'] else 'red' for _, row in df.iterrows()]
+# Function to filter data based on branch criteria
+def filter_branch_data(df):
+    # Remove any blank rows
+    df = df.dropna(how='all')
     
-    # Plotting the bar chart
-    plt.figure(figsize=(10, 6))
-    plt.bar(df['Repository Name'], df[f'{column}_april'], color=colors)
-    plt.title(title)
-    plt.xlabel('Repository Name')
-    plt.ylabel(f'{column} Value')
-    plt.xticks(rotation=90)  # Rotate repository names for readability
-    plt.tight_layout()  # Ensure everything fits in the plot
-    plt.show()
+    branch_filters = ['stg', 'stage', 'stg-aks.stagging']
+    mask = df['Branch'].str.contains('|'.join(branch_filters), case=False, na=False)
+    return df[mask]
 
-# Plot bar charts for Code Smell, Duplications, and Security Hotspot
-if not code_smell_df.empty:
-    plot_bar_chart(code_smell_df, 'Code Smell', 'Code Smell Changes (March vs April)')
-if not duplication_df.empty:
-    plot_bar_chart(duplication_df, 'Duplications', 'Duplication Changes (March vs April)')
-if not security_df.empty:
-    plot_bar_chart(security_df, 'Security Hotspot', 'Security Hotspot Changes (March vs April)')
+# Function to compare metrics and generate results
+def compare_metrics(march_df, april_df, metric_name, min_diff=0):
+    # Merge the dataframes on Repository Name to find common repositories
+    merged_df = pd.merge(
+        march_df[['Repository Name', metric_name]], 
+        april_df[['Repository Name', metric_name]], 
+        on='Repository Name', 
+        suffixes=('_March', '_April')
+    )
+    
+    # Calculate the difference
+    merged_df[f'{metric_name}_Difference'] = merged_df[f'{metric_name}_April'] - merged_df[f'{metric_name}_March']
+    
+    # Filter based on the metric and minimum difference
+    if metric_name == 'Code Smell':
+        # For Code Smell, only include if absolute difference is >= 50
+        changed_df = merged_df[abs(merged_df[f'{metric_name}_Difference']) >= 50]
+    else:
+        # For other metrics, just filter out where there's no change
+        changed_df = merged_df[merged_df[f'{metric_name}_Difference'] != 0]
+    
+    # Remove any rows with NaN values
+    changed_df = changed_df.dropna()
+    
+    return changed_df
 
-print("Comparison completed and files generated.")
+# Function to create Excel file with color coding
+def create_excel_with_color(df, metric_name, output_file):
+    # If no changes, create a simple excel with a message
+    if df.empty:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = f"{metric_name} Changes"
+        ws.cell(row=1, column=1).value = f"No significant changes in {metric_name} between March and April"
+        wb.save(output_file)
+        print(f"No significant changes found for {metric_name}")
+        return
+    
+    # Create a new workbook and select the active sheet
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"{metric_name} Changes"
+    
+    # Add headers and data to worksheet
+    headers = [
+        "Repository Name", 
+        f"{metric_name} (March)", 
+        f"{metric_name} (April)", 
+        f"{metric_name} Difference"
+    ]
+    
+    # Add the headers
+    for col_num, header in enumerate(headers, 1):
+        ws.cell(row=1, column=col_num).value = header
+    
+    # Add the data
+    for row_num, row in enumerate(df.itertuples(index=False), 2):
+        ws.cell(row=row_num, column=1).value = row[0]  # Repository Name
+        ws.cell(row=row_num, column=2).value = row[1]  # March value
+        ws.cell(row=row_num, column=3).value = row[2]  # April value
+        ws.cell(row=row_num, column=4).value = row[3]  # Difference
+        
+        # Apply color to the difference cell
+        # Green if negative (improvement), Red if positive (regression)
+        if row[3] < 0:
+            ws.cell(row=row_num, column=4).fill = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")
+        else:
+            ws.cell(row=row_num, column=4).fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+    
+    # Create a vertical bar chart with positive and negative values going in opposite directions
+    fig, ax = plt.figure(figsize=(10, 8)), plt.subplot(111)
+    
+    # Sort by difference for better visualization
+    plot_df = df.sort_values(f'{metric_name}_Difference')
+    
+    # Plot the horizontal bars (which will appear as vertical when we flip the axes)
+    # Separate positive and negative values
+    pos_mask = plot_df[f'{metric_name}_Difference'] >= 0
+    neg_mask = plot_df[f'{metric_name}_Difference'] < 0
+    
+    # Plot positive values (regressions)
+    if pos_mask.any():
+        ax.barh(
+            y=plot_df.loc[pos_mask, 'Repository Name'],
+            width=plot_df.loc[pos_mask, f'{metric_name}_Difference'],
+            color='red',
+            label='Regression'
+        )
+    
+    # Plot negative values (improvements)
+    if neg_mask.any():
+        ax.barh(
+            y=plot_df.loc[neg_mask, 'Repository Name'],
+            width=plot_df.loc[neg_mask, f'{metric_name}_Difference'],
+            color='green',
+            label='Improvement'
+        )
+    
+    # Add a vertical line at x=0
+    ax.axvline(0, color='black', linestyle='-', linewidth=0.5)
+    
+    plt.title(f'{metric_name} Difference (April - March)')
+    plt.xlabel('Difference')
+    plt.ylabel('Repository')
+    plt.grid(axis='x', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    
+    # Add legend
+    if pos_mask.any() or neg_mask.any():
+        plt.legend()
+    
+    # Save the chart
+    chart_file = f"{metric_name}_chart.png"
+    plt.savefig(chart_file)
+    plt.close()
+    
+    # Add the chart to the Excel file
+    img = Image(chart_file)
+    img.width, img.height = 600, 400
+    ws.add_image(img, 'F2')
+    
+    # Save the Excel workbook
+    wb.save(output_file)
+    
+    # Clean up the temporary chart file
+    os.remove(chart_file)
+
+def main():
+    try:
+        # Load the Excel files (replace with your actual file paths)
+        march_df = pd.read_excel('march_report.xlsx')
+        april_df = pd.read_excel('april_report.xlsx')
+        
+        # Remove blank rows from both datasets
+        march_df = march_df.dropna(how='all')
+        april_df = april_df.dropna(how='all')
+        
+        # Filter the data based on branch criteria
+        march_filtered = filter_branch_data(march_df)
+        april_filtered = filter_branch_data(april_df)
+        
+        # Compare and process each metric
+        metrics = ['Code Smell', 'Duplications', 'Security Hotspot']
+        
+        for metric in metrics:
+            # Compare the metric between the two months
+            result_df = compare_metrics(march_filtered, april_filtered, metric)
+            
+            # Create the output Excel file with color coding and chart
+            output_file = f"{metric.replace(' ', '_')}_comparison.xlsx"
+            create_excel_with_color(result_df, metric, output_file)
+            
+            if not result_df.empty:
+                print(f"Generated {output_file} with {len(result_df)} repositories that had significant changes in {metric}")
+                if metric == 'Code Smell':
+                    print("Note: For Code Smell, only changes with absolute difference ≥ 50 are included")
+        
+        print("\nProcessing complete! All output files have been generated.")
+        
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
+
+if __name__ == "__main__":
+    main()
