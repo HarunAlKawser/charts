@@ -6,7 +6,7 @@ march_df = pd.read_excel('march_report.xlsx')  # Replace with your March file pa
 april_df = pd.read_excel('april_report.xlsx')  # Replace with your April file path
 
 # Define the branches to filter
-branches_to_check = ['stg', 'stage', 'stg-aks.stagging']
+branches_to_check = ['stg', 'stage', 'stg-aks' ,'stagging']
 
 # Filter both dataframes by the given branches
 march_filtered = march_df[march_df['Branch'].isin(branches_to_check)]
@@ -51,17 +51,22 @@ code_smell_df = pd.DataFrame(code_smell_changes)
 duplication_df = pd.DataFrame(duplication_changes)
 security_df = pd.DataFrame(security_changes)
 
-# Save the results to separate Excel files with only the relevant columns
+# Prepare the data for exporting to Excel for Code Smell
 if not code_smell_df.empty:
-    code_smell_df = code_smell_df[['Repository Name', 'Code Smell_march', 'Code Smell_april']]  # Only Code Smell columns
+    code_smell_df['Code Smell Difference'] = code_smell_df['Code Smell_april'] - code_smell_df['Code Smell_march']
+    code_smell_df = code_smell_df[['Repository Name', 'Code Smell_march', 'Code Smell_april', 'Code Smell Difference']]
     code_smell_df.to_excel('code_smell_changes.xlsx', index=False)
 
+# Prepare the data for exporting to Excel for Duplications
 if not duplication_df.empty:
-    duplication_df = duplication_df[['Repository Name', 'Duplications_march', 'Duplications_april']]  # Only Duplications columns
+    duplication_df['Duplication Difference'] = duplication_df['Duplications_april'] - duplication_df['Duplications_march']
+    duplication_df = duplication_df[['Repository Name', 'Duplications_march', 'Duplications_april', 'Duplication Difference']]
     duplication_df.to_excel('duplication_changes.xlsx', index=False)
 
+# Prepare the data for exporting to Excel for Security Hotspot
 if not security_df.empty:
-    security_df = security_df[['Repository Name', 'Security Hotspot_march', 'Security Hotspot_april']]  # Only Security Hotspot columns
+    security_df['Security Hotspot Difference'] = security_df['Security Hotspot_april'] - security_df['Security Hotspot_march']
+    security_df = security_df[['Repository Name', 'Security Hotspot_march', 'Security Hotspot_april', 'Security Hotspot Difference']]
     security_df.to_excel('security_changes.xlsx', index=False)
 
 # Function to plot bar chart with color coding (green for decrease, red for increase)
