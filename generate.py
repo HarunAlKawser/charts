@@ -52,27 +52,38 @@ def compare_metrics(march_df, april_df, metric_name, min_diff=0):
     # Create a dictionary to store the results
     results = []
     
-    # Get unique repository names from March data
-    march_repos = set(march_df['Repository Name'])
-    april_repos = set(april_df['Repository Name'])
+    # Create a unique identifier for each repo-branch combination
+    march_df['RepoAndBranch'] = march_df['Repository Name'] + '___' + march_df['Branch']
+    april_df['RepoAndBranch'] = april_df['Repository Name'] + '___' + april_df['Branch']
     
-    # Find common repositories
-    common_repos = march_repos.intersection(april_repos)
+    # Get unique repo-branch combinations from both months
+    march_repo_branches = set(march_df['RepoAndBranch'])
+    april_repo_branches = set(april_df['RepoAndBranch'])
     
-    # For each common repository, compare the metric values
-    for repo in common_repos:
-        # Skip if the repo name is empty or NaN
+    # Find common repo-branch combinations
+    common_repo_branches = march_repo_branches.intersection(april_repo_branches)
+    
+    # For each common repo-branch, compare the metric values
+    for repo_branch in common_repo_branches:
+        # Skip if the identifier is empty or NaN
+        if pd.isna(repo_branch) or repo_branch == '':
+            continue
+        
+        # Split the identifier back to repository and branch
+        repo, branch = repo_branch.split('___')
+        
+        # Skip if repo is empty
         if pd.isna(repo) or repo == '':
             continue
             
-        # Get the March value, skip if missing
-        march_row = march_df[march_df['Repository Name'] == repo]
+        # Get the March value for this repo-branch, skip if missing
+        march_row = march_df[march_df['RepoAndBranch'] == repo_branch]
         if march_row.empty or pd.isna(march_row[metric_name].values[0]):
             continue
         march_value = march_row[metric_name].values[0]
         
-        # Get the April value, skip if missing
-        april_row = april_df[april_df['Repository Name'] == repo]
+        # Get the April value for this repo-branch, skip if missing
+        april_row = april_df[april_df['RepoAndBranch'] == repo_branch]
         if april_row.empty or pd.isna(april_row[metric_name].values[0]):
             continue
         april_value = april_row[metric_name].values[0]
@@ -81,7 +92,7 @@ def compare_metrics(march_df, april_df, metric_name, min_diff=0):
         difference = april_value - march_value
         
         # For Code Smell, check if the absolute difference is >= 50
-        if metric_name == 'Code Smell' and abs(difference) < 50:
+        if metric_name == 'Code Smell' and abs(difference) < 0:
             continue
         
         # For other metrics, check if there's any change
@@ -94,6 +105,7 @@ def compare_metrics(march_df, april_df, metric_name, min_diff=0):
         # Add to results
         results.append({
             'Repository Name': repo,
+            'Branch': branch,
             'Clean Name': clean_name,
             f'{metric_name}_March': march_value,
             f'{metric_name}_April': april_value,
@@ -124,7 +136,8 @@ def create_excel_with_color(df, metric_name, output_file):
     
     # Add headers and data to worksheet
     headers = [
-        "Repository Name", 
+        "Repository Name",
+        "Branch", 
         "Clean Name",
         f"{metric_name} (March)", 
         f"{metric_name} (April)", 
@@ -138,23 +151,27 @@ def create_excel_with_color(df, metric_name, output_file):
     # Add the data
     for row_num, row in enumerate(df.itertuples(index=False), 2):
         ws.cell(row=row_num, column=1).value = row[0]  # Repository Name
-        ws.cell(row=row_num, column=2).value = row[1]  # Clean Name
-        ws.cell(row=row_num, column=3).value = row[2]  # March value
-        ws.cell(row=row_num, column=4).value = row[3]  # April value
-        ws.cell(row=row_num, column=5).value = row[4]  # Difference
+        ws.cell(row=row_num, column=2).value = row[1]  # Branch
+        ws.cell(row=row_num, column=3).value = row[2]  # Clean Name
+        ws.cell(row=row_num, column=4).value = row[3]  # March value
+        ws.cell(row=row_num, column=5).value = row[4]  # April value
+        ws.cell(row=row_num, column=6).value = row[5]  # Difference
         
         # Apply color to the difference cell
         # Green if negative (improvement), Red if positive (regression)
-        if row[4] < 0:
-            ws.cell(row=row_num, column=5).fill = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")
+        if row[5] < 0:
+            ws.cell(row=row_num, column=6).fill = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")
         else:
-            ws.cell(row=row_num, column=5).fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+            ws.cell(row=row_num, column=6).fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
     
     # Create a vertical bar chart with positive and negative values going in opposite directions
     fig, ax = plt.figure(figsize=(10, 8)), plt.subplot(111)
     
     # Sort by difference for better visualization
     plot_df = df.sort_values(f'{metric_name}_Difference')
+    
+    # Add branch name to the clean name for the chart
+    plot_df['Display_Name'] = plot_df['Clean Name'] + ' (' + plot_df['Branch'] + ')'
     
     # Plot the horizontal bars (which will appear as vertical when we flip the axes)
     # Separate positive and negative values
@@ -164,7 +181,7 @@ def create_excel_with_color(df, metric_name, output_file):
     # SWAPPED: Plot positive values (regressions) on the LEFT
     if pos_mask.any():
         ax.barh(
-            y=plot_df.loc[pos_mask, 'Clean Name'],
+            y=plot_df.loc[pos_mask, 'Display_Name'],
             width=-plot_df.loc[pos_mask, f'{metric_name}_Difference'],  # Negative width to go left
             color='red',
             label='Regression'
@@ -173,7 +190,7 @@ def create_excel_with_color(df, metric_name, output_file):
     # SWAPPED: Plot negative values (improvements) on the RIGHT
     if neg_mask.any():
         ax.barh(
-            y=plot_df.loc[neg_mask, 'Clean Name'],
+            y=plot_df.loc[neg_mask, 'Display_Name'],
             width=-plot_df.loc[neg_mask, f'{metric_name}_Difference'],  # Negative width to flip direction
             color='green',
             label='Improvement'
@@ -184,7 +201,7 @@ def create_excel_with_color(df, metric_name, output_file):
     
     plt.title(f'{metric_name} Difference (April - March)')
     plt.xlabel('Difference (absolute value)')
-    plt.ylabel('Repository')
+    plt.ylabel('Repository and Branch')
     plt.grid(axis='x', linestyle='--', alpha=0.7)
     plt.tight_layout()
     
@@ -200,7 +217,7 @@ def create_excel_with_color(df, metric_name, output_file):
     # Add the chart to the Excel file
     img = Image(chart_file)
     img.width, img.height = 600, 400
-    ws.add_image(img, 'G2')
+    ws.add_image(img, 'H2')
     
     # Save the Excel workbook
     wb.save(output_file)
