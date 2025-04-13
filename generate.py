@@ -91,8 +91,8 @@ def compare_metrics(march_df, april_df, metric_name, min_diff=0):
         # Calculate the difference
         difference = april_value - march_value
         
-        # For Code Smell, check if the absolute difference is >= 50
-        if metric_name == 'Code Smell' and abs(difference) < 10:
+        # For Code Smell, check if the absolute difference is >= 20 OR <= -20
+        if metric_name == 'Code Smell' and abs(difference) < 20:
             continue
         
         # For other metrics, check if there's any change
@@ -262,7 +262,7 @@ def main():
             if not result_df.empty:
                 print(f"Generated {output_file} with {len(result_df)} repositories that had significant changes in {metric}")
                 if metric == 'Code Smell':
-                    print("Note: For Code Smell, only changes with absolute difference ≥ 50 are included")
+                    print("Note: For Code Smell, only changes with absolute difference ≥ 20 are included")
         
         print("\nProcessing complete! All output files have been generated.")
         
