@@ -43,7 +43,7 @@ def filter_branch_data(df):
     # Remove any blank rows where any essential column is missing
     df = df.dropna(subset=['Repository Name', 'Branch'])
     
-    branch_filters = ['stg', 'stage', 'stg-aks.stagging']
+    branch_filters = ['stg', 'stage', 'stg-aks', 'stagging']
     mask = df['Branch'].str.contains('|'.join(branch_filters), case=False, na=False)
     return df[mask]
 
