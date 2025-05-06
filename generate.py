@@ -48,20 +48,20 @@ def filter_branch_data(df):
     return df[mask]
 
 # Function to compare metrics and generate results
-def compare_metrics(march_df, april_df, metric_name, min_diff=0):
+def compare_metrics(first_month, second_month, metric_name, min_diff=0):
     # Create a dictionary to store the results
     results = []
     
     # Create a unique identifier for each repo-branch combination
-    march_df['RepoAndBranch'] = march_df['Repository Name'] + '___' + march_df['Branch']
-    april_df['RepoAndBranch'] = april_df['Repository Name'] + '___' + april_df['Branch']
+    first_month['RepoAndBranch'] = first_month['Repository Name'] + '___' + first_month['Branch']
+    second_month['RepoAndBranch'] = second_month['Repository Name'] + '___' + second_month['Branch']
     
     # Get unique repo-branch combinations from both months
-    march_repo_branches = set(march_df['RepoAndBranch'])
-    april_repo_branches = set(april_df['RepoAndBranch'])
+    first_repo_branches = set(first_month['RepoAndBranch'])
+    second_repo_branches = set(second_month['RepoAndBranch'])
     
     # Find common repo-branch combinations
-    common_repo_branches = march_repo_branches.intersection(april_repo_branches)
+    common_repo_branches = first_repo_branches.intersection(second_repo_branches)
     
     # For each common repo-branch, compare the metric values
     for repo_branch in common_repo_branches:
@@ -76,20 +76,20 @@ def compare_metrics(march_df, april_df, metric_name, min_diff=0):
         if pd.isna(repo) or repo == '':
             continue
             
-        # Get the March value for this repo-branch, skip if missing
-        march_row = march_df[march_df['RepoAndBranch'] == repo_branch]
-        if march_row.empty or pd.isna(march_row[metric_name].values[0]):
+        # Get the first value for this repo-branch, skip if missing
+        first_row = first_month[first_month['RepoAndBranch'] == repo_branch]
+        if first_row.empty or pd.isna(first_row[metric_name].values[0]):
             continue
-        march_value = march_row[metric_name].values[0]
+        first_value = first_row[metric_name].values[0]
         
-        # Get the April value for this repo-branch, skip if missing
-        april_row = april_df[april_df['RepoAndBranch'] == repo_branch]
-        if april_row.empty or pd.isna(april_row[metric_name].values[0]):
+        # Get the second value for this repo-branch, skip if missing
+        second_row = second_month[second_month['RepoAndBranch'] == repo_branch]
+        if second_row.empty or pd.isna(second_row[metric_name].values[0]):
             continue
-        april_value = april_row[metric_name].values[0]
+        second_value = second_row[metric_name].values[0]
         
         # Calculate the difference
-        difference = april_value - march_value
+        difference = second_value - first_value
         
         # For Code Smell, check if the absolute difference is >= 20 OR <= -20
         if metric_name == 'Code Smell' and abs(difference) < 20:
@@ -107,8 +107,8 @@ def compare_metrics(march_df, april_df, metric_name, min_diff=0):
             'Repository Name': repo,
             'Branch': branch,
             'Clean Name': clean_name,
-            f'{metric_name}_March': march_value,
-            f'{metric_name}_April': april_value,
+            f'{metric_name}_first': first_value,
+            f'{metric_name}_second': second_value,
             f'{metric_name}_Difference': difference
         })
     
@@ -124,7 +124,7 @@ def create_excel_with_color(df, metric_name, output_file):
         wb = Workbook()
         ws = wb.active
         ws.title = f"{metric_name} Changes"
-        ws.cell(row=1, column=1).value = f"No significant changes in {metric_name} between March and April"
+        ws.cell(row=1, column=1).value = f"No significant changes in {metric_name} between first and second"
         wb.save(output_file)
         print(f"No significant changes found for {metric_name}")
         return
@@ -139,8 +139,8 @@ def create_excel_with_color(df, metric_name, output_file):
         "Repository Name",
         "Branch", 
         "Clean Name",
-        f"{metric_name} (March)", 
-        f"{metric_name} (April)", 
+        f"{metric_name} (first)", 
+        f"{metric_name} (second)", 
         f"{metric_name} Difference"
     ]
     
@@ -153,8 +153,8 @@ def create_excel_with_color(df, metric_name, output_file):
         ws.cell(row=row_num, column=1).value = row[0]  # Repository Name
         ws.cell(row=row_num, column=2).value = row[1]  # Branch
         ws.cell(row=row_num, column=3).value = row[2]  # Clean Name
-        ws.cell(row=row_num, column=4).value = row[3]  # March value
-        ws.cell(row=row_num, column=5).value = row[4]  # April value
+        ws.cell(row=row_num, column=4).value = row[3]  # first value
+        ws.cell(row=row_num, column=5).value = row[4]  # second value
         ws.cell(row=row_num, column=6).value = row[5]  # Difference
         
         # Apply color to the difference cell
@@ -199,7 +199,7 @@ def create_excel_with_color(df, metric_name, output_file):
     # Add a vertical line at x=0
     ax.axvline(0, color='black', linestyle='-', linewidth=0.5)
     
-    plt.title(f'{metric_name} Difference (April - March)')
+    plt.title(f'{metric_name} Difference (May - April)')
     plt.xlabel('Difference (absolute value)')
     plt.ylabel('Repository and Branch')
     plt.grid(axis='x', linestyle='--', alpha=0.7)
@@ -228,32 +228,32 @@ def create_excel_with_color(df, metric_name, output_file):
 def main():
     try:
         # Load the Excel files (replace with your actual file paths)
-        march_df = pd.read_excel('march_report.xlsx')
-        april_df = pd.read_excel('april_report.xlsx')
+        first_month = pd.read_excel('april_report.xlsx')
+        second_month = pd.read_excel('may_report.xlsx')
         
         # Remove blank rows from both datasets by specifically checking essential columns
         # First, remove rows where Repository Name or Branch is missing
-        march_df = march_df.dropna(subset=['Repository Name', 'Branch'])
-        april_df = april_df.dropna(subset=['Repository Name', 'Branch'])
+        first_month = first_month.dropna(subset=['Repository Name', 'Branch'])
+        second_month = second_month.dropna(subset=['Repository Name', 'Branch'])
         
         # Also remove rows where the Repository Name is an empty string
-        march_df = march_df[march_df['Repository Name'].str.strip() != '']
-        april_df = april_df[april_df['Repository Name'].str.strip() != '']
+        first_month = first_month[first_month['Repository Name'].str.strip() != '']
+        second_month = second_month[second_month['Repository Name'].str.strip() != '']
         
         # Filter the data based on branch criteria
-        march_filtered = filter_branch_data(march_df)
-        april_filtered = filter_branch_data(april_df)
+        first_filtered = filter_branch_data(first_month)
+        second_filtered = filter_branch_data(second_month)
         
         # Compare and process each metric
         metrics = ['Code Smell', 'Duplications', 'Security Hotspot']
         
         for metric in metrics:
             # Only process repositories that have non-null values for this metric
-            march_metric_filtered = march_filtered.dropna(subset=[metric])
-            april_metric_filtered = april_filtered.dropna(subset=[metric])
+            first_metric_filtered = first_filtered.dropna(subset=[metric])
+            second_metric_filtered = second_filtered.dropna(subset=[metric])
             
             # Compare the metric between the two months
-            result_df = compare_metrics(march_metric_filtered, april_metric_filtered, metric)
+            result_df = compare_metrics(first_metric_filtered, second_metric_filtered, metric)
             
             # Create the output Excel file with color coding and chart
             output_file = f"{metric.replace(' ', '_')}_comparison.xlsx"
