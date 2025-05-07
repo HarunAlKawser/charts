@@ -109,8 +109,7 @@ def compare_metrics(first_month, second_month, metric_name, min_diff=0):
             'Clean Name': clean_name,
             f'{metric_name}_first': first_value,
             f'{metric_name}_second': second_value,
-            f'{metric_name}_Difference': difference,
-            'Metric': metric_name  # Add the metric name for later identification
+            f'{metric_name}_Difference': difference
         })
     
     # Convert results to DataFrame
@@ -226,216 +225,101 @@ def create_excel_with_color(df, metric_name, output_file):
     # Clean up the temporary chart file
     os.remove(chart_file)
 
-# IMPROVED: Create a compact summary chart with boxed/separated sections for each metric
-def create_summary_chart(all_results, top_n=3):
-    # Create a figure with subplots for each metric
-    num_metrics = len(all_results)
-    if num_metrics == 0:
-        print("No metrics with significant changes to summarize")
-        return None
+# NEW FUNCTION: Extract top improvements for each metric
+def get_top_improvements(df, metric_name, top_n=5):
+    """Extract top N improvements (negative differences) for a metric"""
+    if df.empty:
+        return pd.DataFrame()
     
-    # Filter out metrics with no improvements
-    metrics_with_improvements = {}
-    for metric_name, df in all_results.items():
-        improvements = df[df[f'{metric_name}_Difference'] < 0].copy()
-        if not improvements.empty:
-            metrics_with_improvements[metric_name] = df
+    # Filter only improvements (negative difference)
+    improvements = df[df[f'{metric_name}_Difference'] < 0].copy()
     
-    if not metrics_with_improvements:
-        print("No improvements found in any metric")
-        return None
+    if improvements.empty:
+        return pd.DataFrame()
     
-    # Update num_metrics to only count those with improvements
-    num_metrics = len(metrics_with_improvements)
+    # Sort by difference (ascending, so most negative values first)
+    improvements = improvements.sort_values(by=f'{metric_name}_Difference')
     
-    # Use a professional color palette
-    bar_color = '#2ca02c'  # Green for improvements
+    # Take top N improvements
+    top_improvements = improvements.head(top_n)
     
-    # Set figure style for professional presentation
-    plt.style.use('default')
+    # Add display name for the chart
+    top_improvements['Display_Name'] = top_improvements['Clean Name'] + ' (' + top_improvements['Branch'] + ')'
     
-    # Calculate optimal figure dimensions based on data
-    # Find the longest repository name to adjust width
-    max_name_length = 0
-    for metric_name, df in metrics_with_improvements.items():
-        improvements = df[df[f'{metric_name}_Difference'] < 0].copy().head(top_n)
-        if not improvements.empty:
-            for name in improvements['Clean Name']:
-                max_name_length = max(max_name_length, len(str(name)))
+    return top_improvements
+
+# NEW FUNCTION: Create combined chart with top improvements for all metrics
+def create_combined_top_improvements_chart(result_dfs, metrics, output_file='top_improvements.png', top_n=5):
+    """Create a combined chart showing top improvements for all metrics"""
     
-    # Adjust width based on maximum name length
-    base_width = 8
-    width_adjustment = min(max_name_length * 0.1, 3)  # Cap the width adjustment
-    fig_width = base_width + width_adjustment
+    # Create figure with subplots (one for each metric)
+    fig, axes = plt.subplots(len(metrics), 1, figsize=(12, 4 * len(metrics)), constrained_layout=True)
     
-    # Height based on number of metrics and bars per metric + extra space for boxes
-    fig_height = 1.8 * top_n * num_metrics
-    
-    # Create figure - use constrained_layout for better spacing with boxes
-    fig = plt.figure(figsize=(fig_width, fig_height), constrained_layout=False)
-    
-    # Create a grid for the subplots with larger gaps between metric sections
-    grid_spec = fig.add_gridspec(nrows=num_metrics, ncols=1, hspace=0.6, 
-                                 left=0.25, right=0.85, top=0.95, bottom=0.05)
-    
-    # Add a title to the entire figure
-    plt.suptitle('Top Quality Improvements (May vs April)', 
-                fontsize=14, y=0.98, fontweight='bold')
+    # If only one metric has data, axes will be a single object instead of array
+    if len(metrics) == 1:
+        axes = [axes]
     
     # Process each metric
-    for i, (metric_name, df) in enumerate(metrics_with_improvements.items()):
-        # Create subplot
-        ax = fig.add_subplot(grid_spec[i, 0])
+    for i, metric in enumerate(metrics):
+        ax = axes[i]
         
-        # Filter for improvements only (negative differences)
-        improvements = df[df[f'{metric_name}_Difference'] < 0].copy()
+        # Get the dataframe for this metric
+        df = result_dfs[i]
         
-        # Sort by difference (most negative = biggest improvement)
-        improvements = improvements.sort_values(by=f'{metric_name}_Difference')
-        
-        # Get top N improvements
-        top_improvements = improvements.head(top_n)
-        
-        # Create shorter display names
-        top_improvements['Display_Name'] = top_improvements['Clean Name'] + ' (' + top_improvements['Branch'].str.split('-').str[0] + ')'
-        
-        # Plot horizontal bars
-        bars = ax.barh(
-            y=top_improvements['Display_Name'],
-            width=-top_improvements[f'{metric_name}_Difference'],  # Make positive for visualization
-            color=bar_color,
-            alpha=0.9,
-            height=0.6,  # Slightly thicker bars for better visibility
-            edgecolor='none'
-        )
-        
-        # Set tight x-axis limits to avoid wasted space
-        # Find the maximum bar width and add a small margin
-        max_bar_width = -top_improvements[f'{metric_name}_Difference'].min() * 1.15
-        ax.set_xlim(0, max_bar_width)
-        
-        # Customize the plot
-        ax.set_title(f'Top {metric_name} Improvements', fontsize=12, fontweight='bold', pad=8)
-        
-        # Create a box around each section by adding visible spines
-        for spine in ax.spines.values():
-            spine.set_visible(True)
-            spine.set_linewidth(1)
-            spine.set_edgecolor('gray')
-            spine.set_linestyle('-')
-        
-        # Custom background for better separation
-        ax.set_facecolor('#f8f8f8')  # Light gray background
-        
-        # Custom x-axis with minimal ticks
-        if max_bar_width > 0:
-            ax.set_xticks([0, max_bar_width/2, max_bar_width])
-            ax.set_xticklabels(['0', f'{int(max_bar_width/2)}', f'{int(max_bar_width)}'])
-        
-        # Add value labels directly on bars
-        for j, bar in enumerate(bars):
-            diff_value = abs(top_improvements.iloc[j][f'{metric_name}_Difference'])
-            before_value = int(top_improvements.iloc[j][f'{metric_name}_first'])
-            after_value = int(top_improvements.iloc[j][f'{metric_name}_second'])
-            
-            # Add improvement value at end of bar
-            ax.text(
-                diff_value + (max_bar_width * 0.02),  # Small offset
-                j,
-                f"-{int(diff_value)}",
-                va='center',
-                fontsize=10,
-                fontweight='bold',
-                color='darkgreen'
-            )
-            
-            # Add from→to at the middle of the bar
-            bar_width = bar.get_width()
-            if bar_width > 20:  # Only add if there's enough space
-                ax.text(
-                    bar_width/2.5,  # Position proportionally inside bar
-                    j,
-                    f"{before_value}→{after_value}",
-                    va='center',
-                    ha='center',
-                    fontsize=9,
-                    color='black'
-                )
-    
-    # Adjust layout to ensure proper spacing
-    plt.tight_layout(rect=[0, 0, 1, 0.97], h_pad=3.0)
-    
-    # Save the summary chart with high resolution and minimal padding
-    summary_file = "top_improvements_summary.png"
-    plt.savefig(summary_file, dpi=300, bbox_inches='tight', pad_inches=0.3)
-    plt.close()
-    
-    print(f"Generated compact presentation-ready chart with boxed sections: {summary_file}")
-    
-    return summary_file
-
-# New function to create a summary Excel with only data (no chart)
-def create_summary_excel(all_results):
-    # Create a summary Excel file with the top improvements data
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Top Improvements Summary"
-    
-    # Add a title
-    ws.cell(row=1, column=1).value = "Summary of Top Improvements Across All Metrics (May - April)"
-    
-    # Add details for each metric
-    current_row = 3
-    
-    for metric, df in all_results.items():
-        # Filter for improvements only (negative differences)
-        improvements = df[df[f'{metric}_Difference'] < 0].copy()
-        
-        if improvements.empty:
-            ws.cell(row=current_row, column=1).value = f"No improvements found for {metric}"
-            current_row += 2
+        if df.empty:
+            ax.text(0.5, 0.5, f"No improvements found for {metric}", 
+                    horizontalalignment='center', verticalalignment='center',
+                    transform=ax.transAxes, fontsize=12)
             continue
         
-        # Sort by difference (most negative = biggest improvement)
-        improvements = improvements.sort_values(by=f'{metric}_Difference')
-        
         # Get top improvements
-        top_improvements = improvements.head(5)  # Show up to 5 in the spreadsheet for detail
+        top_improvements = get_top_improvements(df, metric, top_n)
         
-        # Add header for this metric
-        ws.cell(row=current_row, column=1).value = f"Top Improvements - {metric}"
-        current_row += 1
+        if top_improvements.empty:
+            ax.text(0.5, 0.5, f"No improvements found for {metric}", 
+                    horizontalalignment='center', verticalalignment='center',
+                    transform=ax.transAxes, fontsize=12)
+            continue
         
-        # Add column headers
-        headers = ["Repository", "Branch", "First Value", "Second Value", "Difference"]
-        for col_num, header in enumerate(headers, 1):
-            ws.cell(row=current_row, column=col_num).value = header
-        current_row += 1
+        # Plot the horizontal bars
+        # We want to display the bars in descending order (biggest improvement at top)
+        top_improvements = top_improvements.iloc[::-1]  # Reverse the order
         
-        # Add data rows
-        for _, row in top_improvements.iterrows():
-            ws.cell(row=current_row, column=1).value = row['Clean Name']
-            ws.cell(row=current_row, column=2).value = row['Branch']
-            ws.cell(row=current_row, column=3).value = row[f'{metric}_first']
-            ws.cell(row=current_row, column=4).value = row[f'{metric}_second']
-            ws.cell(row=current_row, column=5).value = row[f'{metric}_Difference']
-            
-            # Color the difference cell green (improvement)
-            ws.cell(row=current_row, column=5).fill = PatternFill(
-                start_color="00FF00", end_color="00FF00", fill_type="solid"
-            )
-            
-            current_row += 1
+        # Create horizontal bars
+        bars = ax.barh(
+            y=top_improvements['Display_Name'],
+            width=-top_improvements[f'{metric}_Difference'],  # Negative to show positive bars for improvements
+            color='green',
+            label=f'Top {top_n} Improvements'
+        )
         
-        # Add spacing between metrics
-        current_row += 3
+        # Add values at the end of each bar
+        for bar in bars:
+            width = bar.get_width()
+            label_x_pos = width * 1.01  # Position just to the right of the bar
+            ax.text(label_x_pos, bar.get_y() + bar.get_height()/2, f'{abs(width):.0f}',
+                    va='center', fontsize=9)
+        
+        # Set title and labels
+        ax.set_title(f'Top {len(top_improvements)} {metric} Improvements (May - April)')
+        ax.set_xlabel('Improvement Value (absolute)')
+        ax.grid(axis='x', linestyle='--', alpha=0.7)
+        
+        # Remove y-axis label to save space
+        ax.set_ylabel('')
+        
+        # Add a dashed vertical line at x=0
+        ax.axvline(0, color='black', linestyle='--', linewidth=0.5, alpha=0.5)
     
-    # Save the summary Excel file
-    summary_excel = "top_improvements_summary.xlsx"
-    wb.save(summary_excel)
-    print(f"Generated summary Excel file: {summary_excel}")
+    # Add overall title
+    plt.suptitle('Top Code Quality Improvements Across Metrics', fontsize=16, y=1.02)
     
-    return summary_excel
+    # Save the combined chart
+    plt.savefig(output_file, bbox_inches='tight')
+    plt.close()
+    
+    print(f"Created combined top improvements chart: {output_file}")
+    return output_file
 
 def main():
     try:
@@ -458,7 +342,7 @@ def main():
         
         # Compare and process each metric
         metrics = ['Code Smell', 'Duplications', 'Security Hotspot']
-        all_results = {}  # Store results for all metrics for the summary chart
+        all_results = []  # Store results for all metrics for combined chart
         
         for metric in metrics:
             # Only process repositories that have non-null values for this metric
@@ -467,10 +351,7 @@ def main():
             
             # Compare the metric between the two months
             result_df = compare_metrics(first_metric_filtered, second_metric_filtered, metric)
-            
-            # Store the results for summary chart
-            if not result_df.empty:
-                all_results[metric] = result_df
+            all_results.append(result_df)  # Store result for combined chart
             
             # Create the output Excel file with color coding and chart
             output_file = f"{metric.replace(' ', '_')}_comparison.xlsx"
@@ -481,17 +362,8 @@ def main():
                 if metric == 'Code Smell':
                     print("Note: For Code Smell, only changes with absolute difference ≥ 20 are included")
         
-        # Handle the summary outputs as separate files
-        if all_results:
-            # 1. Create summary chart as separate image file
-            summary_image = create_summary_chart(all_results, top_n=3)
-            
-            # 2. Create a separate summary Excel file with just the data (no chart)
-            summary_excel = create_summary_excel(all_results)
-            
-            print("\nSummary files generated:")
-            print(f"- Image: {summary_image}")
-            print(f"- Excel: {summary_excel}")
+        # Create a combined chart with top improvements for all metrics
+        create_combined_top_improvements_chart(all_results, metrics, 'top_improvements.png', top_n=5)
         
         print("\nProcessing complete! All output files have been generated.")
         
