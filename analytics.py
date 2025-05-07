@@ -249,11 +249,24 @@ def get_top_improvements(df, metric_name, top_n=5):
     return top_improvements
 
 # NEW FUNCTION: Create combined chart with top improvements for all metrics
-def create_combined_top_improvements_chart(result_dfs, metrics, output_file='top_improvements.png', top_n=5):
+def create_combined_top_improvements_chart(result_dfs, metrics, output_file='top_improvements.png', top_n=3):
     """Create a combined chart showing top improvements for all metrics"""
     
     # Create figure with subplots (one for each metric)
-    fig, axes = plt.subplots(len(metrics), 1, figsize=(12, 4 * len(metrics)), constrained_layout=True)
+    # Reduce overall figure size and adjust height per subplot
+    fig, axes = plt.subplots(len(metrics), 1, figsize=(10, 2.5 * len(metrics)), constrained_layout=False)
+    
+    # Set an even slimmer bar height
+    bar_height = 0.5
+    
+    # Set a consistent style for a more professional look
+    plt.style.use('seaborn-v0_8-whitegrid')
+    
+    # Set consistent colors
+    bar_color = '#2ECC71'  # A nicer green
+    
+    # Standard padding between subplots
+    plt.subplots_adjust(hspace=0.4)
     
     # If only one metric has data, axes will be a single object instead of array
     if len(metrics) == 1:
@@ -273,7 +286,9 @@ def create_combined_top_improvements_chart(result_dfs, metrics, output_file='top
             continue
         
         # Get top improvements
-        top_improvements = get_top_improvements(df, metric, top_n)
+        # Use top_n=2 or 3 as requested
+        actual_top_n = 2 if metric == 'Duplications' else 3
+        top_improvements = get_top_improvements(df, metric, actual_top_n)
         
         if top_improvements.empty:
             ax.text(0.5, 0.5, f"No improvements found for {metric}", 
@@ -285,40 +300,65 @@ def create_combined_top_improvements_chart(result_dfs, metrics, output_file='top
         # We want to display the bars in descending order (biggest improvement at top)
         top_improvements = top_improvements.iloc[::-1]  # Reverse the order
         
-        # Create horizontal bars
+        # Normalize the y-positions to ensure consistent spacing regardless of number of bars
+        # Create positions with no gaps between bars
+        positions = np.arange(len(top_improvements))
+        
+        # Create horizontal bars with consistent height and no gaps
         bars = ax.barh(
-            y=top_improvements['Display_Name'],
+            y=positions,  # Use normalized positions
             width=-top_improvements[f'{metric}_Difference'],  # Negative to show positive bars for improvements
-            color='green',
-            label=f'Top {top_n} Improvements'
+            color=bar_color,
+            height=bar_height,  # Even slimmer bars
+            align='center'  # Center alignment
         )
+        
+        # Adjust y-axis to ensure proper labeling
+        ax.set_yticks(positions)
+        ax.set_yticklabels(top_improvements['Display_Name'], fontsize=9)
+        
+        # Set consistent y-limits regardless of number of bars
+        # This ensures the chart height is the same whether it has 2 or 3 bars
+        ax.set_ylim(-0.5, max(2.5, len(positions) - 0.1))  # Ensure minimum of 3 positions worth of height
         
         # Add values at the end of each bar
         for bar in bars:
             width = bar.get_width()
             label_x_pos = width * 1.01  # Position just to the right of the bar
-            ax.text(label_x_pos, bar.get_y() + bar.get_height()/2, f'{abs(width):.0f}',
-                    va='center', fontsize=9)
+            
+            # Format label based on metric
+            if metric == 'Duplications':
+                # Show Duplications with fraction/decimal values
+                formatted_value = f'{abs(width):.2f}'
+            else:
+                # Show other metrics as integers
+                formatted_value = f'{abs(width):.0f}'
+                
+            ax.text(label_x_pos, bar.get_y() + bar.get_height()/2, formatted_value,
+                    va='center', fontsize=8, color='#555555', fontweight='bold')
         
-        # Set title and labels
-        ax.set_title(f'Top {len(top_improvements)} {metric} Improvements (May - April)')
-        ax.set_xlabel('Improvement Value (absolute)')
-        ax.grid(axis='x', linestyle='--', alpha=0.7)
+        # Set title and labels - more concise and clean
+        ax.set_title(f'Top {metric} Improvements', fontsize=10, pad=6)
+        ax.set_xlabel('Improvement Value', fontsize=9)
+        
+        # Lighter grid for better appearance
+        ax.grid(axis='x', linestyle='--', alpha=0.3)
         
         # Remove y-axis label to save space
         ax.set_ylabel('')
         
-        # Add a dashed vertical line at x=0
-        ax.axvline(0, color='black', linestyle='--', linewidth=0.5, alpha=0.5)
+        # Add a subtle vertical line at x=0
+        ax.axvline(0, color='#CCCCCC', linestyle='-', linewidth=0.5, alpha=0.5)
     
-    # Add overall title
-    plt.suptitle('Top Code Quality Improvements Across Metrics', fontsize=16, y=1.02)
+    # Add overall title - more concise and professional
+    plt.suptitle('Code Quality Improvements (May - April)', fontsize=14, y=0.98, fontweight='bold')
     
-    # Save the combined chart
-    plt.savefig(output_file, bbox_inches='tight')
+    # Save the combined chart with a white background
+    plt.savefig(output_file, bbox_inches='tight', dpi=120, facecolor='white')
+    
     plt.close()
     
-    print(f"Created combined top improvements chart: {output_file}")
+    print(f"Created professional combined top improvements chart: {output_file}")
     return output_file
 
 def main():
@@ -363,7 +403,7 @@ def main():
                     print("Note: For Code Smell, only changes with absolute difference ≥ 20 are included")
         
         # Create a combined chart with top improvements for all metrics
-        create_combined_top_improvements_chart(all_results, metrics, 'top_improvements.png', top_n=5)
+        create_combined_top_improvements_chart(all_results, metrics, 'top_improvements.png')
         
         print("\nProcessing complete! All output files have been generated.")
         
