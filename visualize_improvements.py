@@ -65,8 +65,8 @@ def visualize_improvements(data, top_n=3):
         names = list(values.keys())
         values_list = list(values.values())
         
-        # Create horizontal bar chart with slimmer bars (height=0.5)
-        bars = axes[i].barh(names, values_list, color=colors[category], alpha=0.8, height=0.5)
+        # Create horizontal bar chart
+        bars = axes[i].barh(names, values_list, color=colors[category], alpha=0.8)
         axes[i].set_title(f'Top {top_n} {category} Improvements')
         
         # Add value labels on the bars
@@ -117,9 +117,9 @@ def visualize_improvements(data, top_n=3):
     # Create color mapping
     color_list = [colors[cat] for cat in df['Category']]
     
-    # Plot combined chart with slimmer bars
+    # Plot combined chart
     plt.figure(figsize=(12, 10))
-    bars = plt.barh(range(len(df)), df['DisplayValue'], color=color_list, alpha=0.8, height=0.5)
+    bars = plt.barh(range(len(df)), df['DisplayValue'], color=color_list, alpha=0.8)
     plt.yticks(range(len(df)), df['Repository'])
     plt.gca().invert_yaxis()  # Highest values at top
     plt.xlabel('Improvement Value')
@@ -143,9 +143,9 @@ def visualize_improvements(data, top_n=3):
 # Example usage
 if __name__ == "__main__":
     # File paths - update these to your actual Excel files
-    security_file = "security_hotspots.xlsx"
-    duplications_file = "duplications.xlsx"
-    code_smell_file = "code_smell.xlsx"
+    security_file = "Security_Hotspot_comparison.xlsx"
+    duplications_file = "Duplications_comparison.xlsx"
+    code_smell_file = "Code_Smell_comparison.xlsx"
     
     # Read data from Excel files
     data = read_excel_data(security_file, duplications_file, code_smell_file)
